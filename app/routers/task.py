@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, status
 
-from app.deps.api import get_current_user
-from app.deps.db import CurrentAsyncSession, get_repository
+from app.deps.api import get_current_user, get_service
+from app.deps.db import get_repository
 from app.models.task import Task
 from app.repositories.task import TaskRepository
 from app.schemas.task import CreateTaskRequest, TaskOut, UpdateTaskRequest
 from app.schemas.user import User
+from app.services.task import TaskService
 
 router = APIRouter()
 
@@ -14,14 +14,12 @@ router = APIRouter()
 @router.get("/", response_model=list[TaskOut])
 async def read_tasks(
     task_repo: TaskRepository = Depends(get_repository(TaskRepository)),
+    task_service: TaskService = Depends(get_service(TaskService)),
     current_user: User = Depends(get_current_user),
 ):
-    tasks = await task_repo.read_tasks(current_user=current_user)
-
-    # if not tasks:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_404_NOT_FOUND, detail="Tasks not found"
-    #     )
+    tasks = await task_service.read_tasks(
+        current_user=current_user, task_repo=task_repo
+    )
 
     return tasks
 
@@ -30,42 +28,33 @@ async def read_tasks(
 async def create_task(
     task: CreateTaskRequest,
     task_repo: TaskRepository = Depends(get_repository(TaskRepository)),
+    task_service: TaskService = Depends(get_service(TaskService)),
     current_user: User = Depends(get_current_user),
 ):
-    create_task_model = Task(**task.model_dump(), user_id=current_user.id)
-    return await task_repo.create_task(task=create_task_model)
+    return await task_service.create_task(
+        task=task, current_user=current_user, task_repo=task_repo
+    )
 
 
 @router.get("/{task_id}", response_model=TaskOut)
 async def read_task(
     task_id: int,
     task_repo: TaskRepository = Depends(get_repository(TaskRepository)),
+    task_service: TaskService = Depends(get_service(TaskService)),
     current_user: User = Depends(get_current_user),
 ):
-    task = await task_repo.get_task_by_id(task_id=task_id)
-
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
-        )
-
-    return task
+    return await task_service.get_task_by_id(task_id=task_id, task_repo=task_repo)
 
 
 @router.put("/{task_id}", response_model=TaskOut)
 async def update_task(
     task_id: int,
     task_update: UpdateTaskRequest,
+    task_service: TaskService = Depends(get_service(TaskService)),
     task_repo: TaskRepository = Depends(get_repository(TaskRepository)),
     current_user: User = Depends(get_current_user),
 ):
-    task = await task_repo.get_task_by_id(task_id=task_id)
-
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
-        )
-
+    task = await task_service.get_task_by_id(task_id=task_id, task_repo=task_repo)
     return await task_repo.update_task(task=task, task_update=task_update)
 
 
@@ -73,16 +62,9 @@ async def update_task(
 async def delete_task(
     task_id: int,
     task_repo: TaskRepository = Depends(get_repository(TaskRepository)),
+    task_service: TaskService = Depends(get_service(TaskService)),
     current_user: User = Depends(get_current_user),
 ):
-    task = await task_repo.get_task_by_id(task_id=task_id)
-
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
-        )
-
-    if task.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-
-    return await task_repo.delete_task(task=task)
+    return await task_service.delete_task(
+        task_id=task_id, task_repo=task_repo, current_user=current_user
+    )

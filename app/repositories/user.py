@@ -1,5 +1,4 @@
-from datetime import timedelta
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_password_hash, verify_password
@@ -11,6 +10,18 @@ from app.schemas.user import CreateUserRequest
 class UserRepository(BaseRepository):
     def __init__(self, conn: AsyncSession) -> None:
         super().__init__(conn)
+
+    async def get_user_by_username(self, *, username: str) -> User:
+        stmt = select(User).where(User.username == username)
+        result = await self.connection.execute(stmt)
+        return result.scalars().first()
+
+    async def get_duplicated_user(self, *, user_create: CreateUserRequest) -> User:
+        stmt = select(User).where(
+            or_(User.username == user_create.username, User.email == user_create.email)
+        )
+        result = await self.connection.execute(stmt)
+        return result.scalars().first()
 
     async def read_user(self, *, user_id: int) -> User:
         stmt = select(User).where(User.id == user_id)

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from app.deps.api import RoleChecker, get_current_user
+from fastapi import APIRouter, Depends
+from app.deps.api import RoleChecker, get_current_user, get_service
 from app.deps.db import get_repository
 from app.repositories.user import UserRepository
 from app.schemas.user import User
+from app.services.admin import AdminService
 
 router = APIRouter()
 
@@ -11,10 +12,11 @@ router = APIRouter()
 async def read_user(
     user_id: int,
     user_repo: UserRepository = Depends(get_repository(UserRepository)),
+    user_service: AdminService = Depends(get_service(AdminService)),
     current_user: User = Depends(get_current_user),
     authorzied=Depends(RoleChecker(["admin"])),
 ):
-    user = await user_repo.read_user(user_id=user_id)
+    return await user_service.read_user(user_id=user_id, user_repo=user_repo)
     # stmt = (
     #     select(User)
     #     .join(User.todos)
@@ -35,10 +37,3 @@ async def read_user(
     #     user.todos = [todo for todo in user.todos if todo.id > 2]
     # else:
     #     user.todos = []
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-
-    return user
